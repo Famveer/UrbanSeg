@@ -1,0 +1,22 @@
+#python 3.12
+jupyter
+numpy
+pandas
+tqdm
+opencv-python
+Pillow
+joblib
+matplotlib
+transformers
+torch
+torchvision
+scikit-learn
+graphviz
+seaborn
+shapely
+dotenv
+pydantic-settings
+scikit-image
+lime
+gluoncv
+mxnet

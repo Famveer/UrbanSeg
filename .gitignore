@@ -1,0 +1,44 @@
+.ipynb_checkpoints
+__pycache__
+
+*.pyc
+
+# data
+pp2/
+CLIP/
+SigLIP/
+MNIST/
+EMNIST/
+FashionMNIST/
+CIFAR10/
+CIFAR100/
+STL10/
+LlaVA/
+BLIP/
+BLIP2/
+Celeba/
+
+#usd4k
+SegmentationClass/
+SegmentationObject/
+
+# deeplabv3_xception
+*.h5
+frozen_inference_graph.pb
+model.ckpt.data-00000-of-00001
+model.ckpt.index
+
+# places_wideresnet
+*.pth.tar
+
+# placepulse vit
+*.pth
+*.pt
+
+download_models.sh
+
+Logs/
+outputs/
+
+#local env files
+.env
