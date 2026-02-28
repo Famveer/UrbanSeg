@@ -227,10 +227,10 @@ class SHAPAnalyzer:
             df = df.sort_values('mean_abs_shap', ascending=False)
         return df.reset_index(drop=True)
 
-    def top_features(self, contributions, n=10):
+    def top_features(self, contributions, top_n_features=15):
         """Print and return top-n features by mean |SHAP|."""
-        df = self.get_feature_importance(contributions).head(n)
-        print(f"\nTop {n} features by mean |SHAP|:")
+        df = self.get_feature_importance(contributions).head(top_n_features)
+        print(f"\nTop {top_n_features} features by mean |SHAP|:")
         print(df.to_string(index=False))
         return df
 
@@ -362,7 +362,54 @@ class SHAPAnalyzer:
         plt.tight_layout()
         if show:
             plt.show()
-        return fig, ax
+        else:
+            plt.close(fig)
+
+    def feature_importance_plot(self, sv, class_idx=1, top_n_features=20, show=True, figsize=(10, 7)):
+        """
+        Pseudo-global feature importance: mean absolute SHAP value per feature
+        across all samples — equivalent to LIME's global_importance_plot.
+
+        Mirrors the same style and behavior: returns a DataFrame, respects
+        show=False (closes the figure without rendering in Jupyter).
+
+        Parameters
+        ----------
+        X         : array-like or DataFrame
+        class_idx : int   — class to analyse for multiclass models (default=1)
+        top_n_features     : int   — max features to display
+        show      : bool
+        figsize   : tuple
+
+        Returns
+        -------
+        pd.DataFrame  columns=['feature', 'mean_abs_shap']
+        """
+        importance = self.top_features(sv, top_n_features)
+        feat_labels = importance["feature"].values
+        feat_vals = importance["mean_abs_shap"].values
+
+        # Plot
+        y_pos = np.arange(len(feat_labels))
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.barh(y_pos, feat_vals, color='#2166ac', edgecolor='white', height=0.6)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(feat_labels, fontsize=10)
+        ax.axvline(0, color='black', linewidth=0.8)
+        ax.invert_yaxis()
+        ax.set_xlabel('Mean |SHAP value|', fontsize=11)
+        ax.set_title('Global Feature Importance (SHAP)', fontsize=13, fontweight='bold')
+
+        # Annotate bars
+        for i, v in enumerate(feat_vals):
+            ax.text(v + 0.0005, i, f'{v:.4f}', va='center', fontsize=8, color='#2166ac')
+
+        plt.tight_layout()
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+
 
     # ------------------------------------------------------------------
     # Plots — SINGLE SAMPLE

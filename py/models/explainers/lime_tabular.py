@@ -102,13 +102,13 @@ class LIMEAnalyzer:
         model,
         feature_names=None,
         class_names=None,
-        mode='classification',
+        ml_task='classification',
         kernel_background_samples=100,   # kept for API parity with SHAPAnalyzer
     ):
         self.model = model
         self.feature_names = feature_names
         self.class_names = class_names
-        self.mode = mode
+        self.ml_task = 'classification' if "class" in ml_task.lower() else 'regression'
 
         self.explainer = None
         self._classifier = None
@@ -259,7 +259,7 @@ class LIMEAnalyzer:
             feature_names=self.feature_names,
             class_names=self.class_names,
             categorical_features=categorical_features,
-            mode=self.mode,
+            mode=self.ml_task,
             discretize_continuous=discretize_continuous,
             discretizer=discretizer,
             random_state=42,
@@ -268,86 +268,55 @@ class LIMEAnalyzer:
 
         return self
 
-    def explain_sample(
+    def explain(
         self,
         X,
-        sample_idx=0,
+        sample_idx=None,
         num_features=10,
         num_samples=5000,
-        top_labels=1,
-        plot=False,
-        show=True,
+        labels_to_explain=1,
         **kwargs,
     ):
         """
-        Explain a single prediction.
+        Explain one or multiple samples depending on sample_idx.
 
         Parameters
         ----------
         X : array-like or DataFrame
-        sample_idx : int — which row to explain
-        num_features : int — max features in the explanation
-        num_samples : int — perturbation samples for LIME
-        top_labels : int — how many predicted classes to explain
-        plot : bool — show the matplotlib plot immediately
-        show : bool — call plt.show() (only used when plot=True)
+        sample_idx : int, list of int, or None
+            - int          → explain that single sample, return one Explanation
+            - list of int  → explain those samples, return list of Explanation
+            - None         → explain ALL samples, return list of Explanation
+        num_features : int — max features per explanation
+        num_samples  : int — LIME perturbation samples (higher = slower, more accurate)
+        labels_to_explain   : int — how many predicted classes to explain
         **kwargs
             Forwarded to explainer.explain_instance().
 
         Returns
         -------
-        lime.explanation.Explanation
+        lime.explanation.Explanation          if sample_idx is int
+        list of lime.explanation.Explanation  if sample_idx is list or None
         """
         if self.explainer is None:
             raise RuntimeError("Call fit(X_train) before explaining samples.")
 
         X_arr = self._transform_X(X)
-        instance = X_arr[sample_idx]
 
-        exp = self.explainer.explain_instance(
-            data_row=instance,
-            predict_fn=self._predict_fn,
-            num_features=num_features,
-            num_samples=num_samples,
-            top_labels=top_labels,
-            **kwargs,
-        )
+        # ── Single sample ────────────────────────────────────────────────
+        if isinstance(sample_idx, int):
+            exp = self.explainer.explain_instance(
+                data_row=X_arr[sample_idx],
+                predict_fn=self._predict_fn,
+                num_features=num_features,
+                num_samples=num_samples,
+                top_labels=labels_to_explain,
+                **kwargs,
+            )
+            return exp
 
-        if plot:
-            self.plot_explanation(exp, show=show)
-
-        return exp
-
-    def explain_multiple(
-        self,
-        X,
-        sample_indices=None,
-        num_features=10,
-        num_samples=5000,
-        top_labels=1,
-        **kwargs,
-    ):
-        """
-        Explain multiple samples and return a list of Explanation objects.
-
-        Parameters
-        ----------
-        X : array-like or DataFrame
-        sample_indices : list of int or None — defaults to all samples
-        num_features : int
-        num_samples : int
-        top_labels : int
-
-        Returns
-        -------
-        list of lime.explanation.Explanation
-        """
-        if self.explainer is None:
-            raise RuntimeError("Call fit(X_train) before explaining samples.")
-
-        X_arr = self._transform_X(X)
-        indices = sample_indices if sample_indices is not None else range(len(X_arr))
-
+        # ── Multiple samples ─────────────────────────────────────────────
+        indices = sample_idx if sample_idx is not None else range(len(X_arr))
         explanations = []
         for i in indices:
             exp = self.explainer.explain_instance(
@@ -355,7 +324,7 @@ class LIMEAnalyzer:
                 predict_fn=self._predict_fn,
                 num_features=num_features,
                 num_samples=num_samples,
-                top_labels=top_labels,
+                top_labels=labels_to_explain,
                 **kwargs,
             )
             explanations.append(exp)
@@ -367,7 +336,35 @@ class LIMEAnalyzer:
     # Plots
     # ------------------------------------------------------------------
 
-    def plot_explanation(self, exp, label=None, show=True, figsize=(10, 5)):
+    def plot_explanation(self, 
+                         exp, 
+                         label=None, 
+                         top_n_features=None, 
+                         show=True, 
+                         # Single parameters
+                         figsize_single=(10, 5),
+                         # Multi parameters
+                         sample_indices=None,
+                         ncols=2,
+                         figsize_per_plot=(8, 4),
+                         ):
+        if not isinstance(exp, list):
+            self.plot_single(exp, 
+                             label=label, 
+                             top_n_features=top_n_features, 
+                             show=show, 
+                             figsize=figsize_single)
+            return
+        
+        self.plot_multiple(exp, 
+                           sample_indices=sample_indices, 
+                           label=label, 
+                           top_n_features=top_n_features, 
+                           show=show, 
+                           ncols=ncols, 
+                           figsize_per_plot=figsize_per_plot)
+
+    def plot_single(self, exp, label=None, top_n_features=None, show=True, figsize=(10, 5)):
         """
         Matplotlib bar chart for a single LIME Explanation object.
 
@@ -379,7 +376,10 @@ class LIMEAnalyzer:
         figsize : tuple
         """
         label = label if label is not None else exp.top_labels[0]
-        features, weights = zip(*exp.as_list(label=label))
+        pairs = exp.as_list(label=label)
+        if top_n_features is not None:
+            pairs = sorted(pairs, key=lambda x: abs(x[1]), reverse=True)[:top_n_features]
+        features, weights = zip(*pairs)
 
         colors = ['#d73027' if w > 0 else '#4575b4' for w in weights]
 
@@ -400,13 +400,15 @@ class LIMEAnalyzer:
         plt.tight_layout()
         if show:
             plt.show()
-        return fig, ax
-
+        else:
+            plt.close(fig)
+            
     def plot_multiple(
         self,
         explanations,
         sample_indices=None,
         label=None,
+        top_n_features=None,
         ncols=2,
         figsize_per_plot=(8, 4),
         show=True,
@@ -432,7 +434,10 @@ class LIMEAnalyzer:
 
         for i, exp in enumerate(explanations):
             lbl = label if label is not None else exp.top_labels[0]
-            features, weights = zip(*exp.as_list(label=lbl))
+            pairs = exp.as_list(label=lbl)
+            if top_n_features is not None:
+                pairs = sorted(pairs, key=lambda x: abs(x[1]), reverse=True)[:top_n_features]
+            features, weights = zip(*pairs)
             colors = ['#d73027' if w > 0 else '#4575b4' for w in weights]
             y_pos = np.arange(len(features))
 
@@ -456,9 +461,10 @@ class LIMEAnalyzer:
         plt.tight_layout()
         if show:
             plt.show()
-        return fig, axes
-
-    def plot_global_importance(self, explanations, label=None, top_n=15,
+        else:
+            plt.close(fig)
+            
+    def feature_importance_plot(self, explanations, label=None, top_n_features=15,
                                show=True, figsize=(10, 6)):
         """
         Aggregate LIME weights across multiple explanations to produce a
@@ -468,7 +474,7 @@ class LIMEAnalyzer:
         ----------
         explanations : list of lime.explanation.Explanation
         label : int or None — class index (defaults to top label of first exp)
-        top_n : int — features to display
+        top_n_features : int — features to display
         show : bool
         figsize : tuple
 
@@ -476,22 +482,7 @@ class LIMEAnalyzer:
         -------
         pd.DataFrame with columns ['feature', 'mean_abs_weight']
         """
-        lbl = label if label is not None else explanations[0].top_labels[0]
-
-        # Accumulate weights per feature (feature names may include discretized ranges)
-        weight_accum = {}
-        count_accum = {}
-        for exp in explanations:
-            for feat, weight in exp.as_list(label=lbl):
-                # Normalise to base feature name for cleaner aggregation
-                base = _strip_discretized_suffix(feat)
-                weight_accum[base] = weight_accum.get(base, 0.0) + abs(weight)
-                count_accum[base] = count_accum.get(base, 0) + 1
-
-        importance = pd.DataFrame([
-            {'feature': k, 'mean_abs_weight': weight_accum[k] / count_accum[k]}
-            for k in weight_accum
-        ]).sort_values('mean_abs_weight', ascending=False).head(top_n).reset_index(drop=True)
+        importance = self.top_features(explanations, label, top_n_features)
 
         # Plot
         fig, ax = plt.subplots(figsize=figsize)
@@ -502,11 +493,126 @@ class LIMEAnalyzer:
         ax.invert_yaxis()
         ax.set_xlabel("Mean |LIME weight|", fontsize=11)
         ax.set_title("Pseudo-Global Feature Importance (LIME)", fontsize=13, fontweight='bold')
+        
+        # Annotate bars
+        for i, v in enumerate(importance['mean_abs_weight'].values):
+            ax.text(v + 0.0005, i, f'{v:.4f}', va='center', fontsize=8, color='#2166ac')
+
         plt.tight_layout()
         if show:
             plt.show()
+        else:
+            plt.close(fig)
 
-        return importance
+
+    def contribution_plot(self, explanations, label=None, top_n_features=15,
+                          show=True, figsize=(10, 7)):
+        """
+        Bar chart showing mean positive (red) and mean negative (blue)
+        LIME contributions per feature — same color scheme as waterfall / SHAP.
+
+        Aggregates weights across multiple explanations:
+          - Red  (right) → mean of positive LIME weights across samples
+          - Blue (left)  → mean magnitude of negative LIME weights across samples
+
+        Features are sorted by total mean |weight| (most impactful on top).
+
+        Parameters
+        ----------
+        explanations : list of lime.explanation.Explanation
+            From explain_multiple() or a list of explain_sample() results.
+        label : int or None
+            Class index to aggregate (defaults to top label of first explanation).
+        top_n_features : int
+            Max number of features to display.
+        show : bool
+        figsize : tuple
+
+        Returns
+        -------
+        pd.DataFrame  columns=['feature', 'mean_pos', 'mean_neg', 'total']
+        """
+        lbl = label if label is not None else explanations[0].top_labels[0]
+
+        # Accumulate positive and negative weights separately per base feature
+        pos_accum   = {}
+        neg_accum   = {}
+        pos_count   = {}
+        neg_count   = {}
+
+        for exp in explanations:
+            for feat, weight in exp.as_list(label=lbl):
+                base = _strip_discretized_suffix(feat)
+                if weight >= 0:
+                    pos_accum[base] = pos_accum.get(base, 0.0) + weight
+                    pos_count[base] = pos_count.get(base, 0) + 1
+                else:
+                    neg_accum[base] = neg_accum.get(base, 0.0) + weight   # stays negative
+                    neg_count[base] = neg_count.get(base, 0) + 1
+
+        # All features seen across both dicts
+        all_features = set(pos_accum) | set(neg_accum)
+
+        rows = []
+        for feat in all_features:
+            mean_pos =  pos_accum.get(feat, 0.0) / max(pos_count.get(feat, 1), 1)
+            mean_neg = -neg_accum.get(feat, 0.0) / max(neg_count.get(feat, 1), 1)  # magnitude
+            rows.append({
+                'feature' : feat,
+                'mean_pos': mean_pos,
+                'mean_neg': mean_neg,
+                'total'   : mean_pos + mean_neg,
+            })
+
+        df = (pd.DataFrame(rows)
+                .sort_values('total', ascending=False)
+                .head(top_n_features)
+                .reset_index(drop=True))
+
+        # Reverse so most important is on top in the horizontal bar chart
+        df_plot  = df.iloc[::-1].reset_index(drop=True)
+        y_pos    = np.arange(len(df_plot))
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        ax.barh(y_pos,  df_plot['mean_pos'], color='#d73027', edgecolor='white',
+                height=0.6, label='Positive contribution')
+        ax.barh(y_pos, -df_plot['mean_neg'], color='#4575b4', edgecolor='white',
+                height=0.6, label='Negative contribution')
+
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(df_plot['feature'], fontsize=10)
+        ax.axvline(0, color='black', linewidth=0.8)
+        ax.set_xlabel('Mean LIME weight', fontsize=11)
+
+        class_label = (
+            self.class_names[lbl]
+            if self.class_names and lbl < len(self.class_names)
+            else f'class {lbl}'
+        )
+        ax.set_title(
+            f'Feature Contributions  (red = positive  |  blue = negative)  —  {class_label}',
+            fontsize=13, fontweight='bold'
+        )
+        ax.legend(fontsize=10)
+
+        # Annotate bar tips
+        for i, row in df_plot.iterrows():
+            if row['mean_pos'] > 0:
+                ax.text(row['mean_pos'] + 0.0005, i,
+                        f"+{row['mean_pos']:.4f}", va='center', fontsize=8, color='#d73027')
+            if row['mean_neg'] > 0:
+                ax.text(-row['mean_neg'] - 0.0005, i,
+                        f"-{row['mean_neg']:.4f}", va='center', ha='right', fontsize=8, color='#4575b4')
+
+        plt.tight_layout()
+        if show:
+            plt.show()
+            return
+        else:
+            plt.close(fig)
+
+        return df
 
     # ------------------------------------------------------------------
     # Utilities
@@ -529,7 +635,7 @@ class LIMEAnalyzer:
         rows = exp.as_list(label=lbl)
         return pd.DataFrame(rows, columns=['feature', 'weight'])
 
-    def get_explanations_df(self, explanations, label=None, sample_indices=None):
+    def get_lime_df(self, explanations, label=None, sample_indices=None):
         """
         Stack multiple explanations into one long-format DataFrame.
 
@@ -550,7 +656,27 @@ class LIMEAnalyzer:
             dfs.append(df)
         return pd.concat(dfs, ignore_index=True)
 
-    def top_features(self, explanations, label=None, n=10):
+    def get_feature_importance(self, explanations, label=None):
+        lbl = label if label is not None else explanations[0].top_labels[0]
+
+        # Accumulate weights per feature (feature names may include discretized ranges)
+        weight_accum = {}
+        count_accum = {}
+        for exp in explanations:
+            for feat, weight in exp.as_list(label=lbl):
+                # Normalise to base feature name for cleaner aggregation
+                base = _strip_discretized_suffix(feat)
+                weight_accum[base] = weight_accum.get(base, 0.0) + abs(weight)
+                count_accum[base] = count_accum.get(base, 0) + 1
+
+        importance = pd.DataFrame([
+            {'feature': k, 'mean_abs_weight': weight_accum[k] / count_accum[k]}
+            for k in weight_accum
+        ]).sort_values('mean_abs_weight', ascending=False).reset_index(drop=True)
+        
+        return importance
+
+    def top_features(self, explanations, label=None, top_n_features=15):
         """
         Print and return the top-n features by mean |LIME weight| across
         multiple explanations.
@@ -565,8 +691,8 @@ class LIMEAnalyzer:
         -------
         pd.DataFrame
         """
-        df = self.plot_global_importance(explanations, label=label, top_n=n, show=False)
-        print(f"\nTop {n} features by mean |LIME weight|:")
+        df = self.get_feature_importance(explanations, label=label).head(top_n_features)
+        print(f"\nTop {top_n_features} features by mean |LIME weight|:")
         print(df.to_string(index=False))
         return df
 
