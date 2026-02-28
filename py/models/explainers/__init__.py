@@ -1,2 +1,2 @@
-from .shap import SHAPAnalyzer
-from .lime import LIMEAnalyzer
+from .shap_tabular import SHAPAnalyzer
+from .lime_tabular import LIMEAnalyzer

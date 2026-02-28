@@ -265,14 +265,14 @@ class SHAPAnalyzer:
             sv_plot = sv
         
         shap.summary_plot(
-            sv.values, X_arr,
+            sv_plot.values, X_arr,
             feature_names=self.feature_names,
             plot_type=plot_type,
             max_display=max_display,
             class_names=self.class_names,
             show=show,
         )
-
+        
     def dependence_plot(self, feature, X, sv, class_idx=1, interaction_feature='auto', show=True):
         """Dependence plot for a single feature."""
         X_arr = self._to_array(X)
@@ -301,12 +301,74 @@ class SHAPAnalyzer:
             sv = self._slice_class(sv, class_idx)
 
         shap.plots.beeswarm(sv, max_display=max_display, show=show)
+        
+    def contribution_plot(self, sv, class_idx=1, max_display=10, show=True, figsize=(10, 7)):
+        """
+        Bar chart showing mean positive (red) and mean negative (blue)
+        SHAP contributions per feature — same color scheme as waterfall.
+
+        Each feature gets two bars stacked from zero:
+          - Red  → average of positive SHAP values across samples
+          - Blue → average of negative SHAP values across samples
+
+        Features are sorted by total mean |SHAP| (most impactful on top).
+
+        Parameters
+        ----------
+        X           : array-like or DataFrame
+        class_idx   : int   — class to analyse for multiclass models (default=1)
+        max_display : int   — max number of features to show
+        show        : bool
+        figsize     : tuple
+        """
+        if self._is_multiclass(sv):
+            sv = self._slice_class(sv, class_idx)
+
+        vals = sv.values   # (n_samples, n_features)
+
+        # Separate positive and negative contributions per feature
+        pos_mean =  np.where(vals > 0, vals, 0).mean(axis=0)
+        neg_mean = -np.where(vals < 0, vals, 0).mean(axis=0)   # stored as positive magnitude
+
+        # Sort by total importance and trim to max_display
+        order      = np.argsort(pos_mean + neg_mean)[::-1][:max_display]
+        order      = order[::-1]   # flip so most important is on top
+
+        feat_labels = [self.feature_names[i] for i in order]
+        pos_vals    = pos_mean[order]
+        neg_vals    = neg_mean[order]
+
+        y_pos = np.arange(len(order))
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        ax.barh(y_pos, pos_vals,  color='#d73027', edgecolor='white', height=0.6, label='Positive contribution')
+        ax.barh(y_pos, -neg_vals, color='#4575b4', edgecolor='white', height=0.6, label='Negative contribution')
+
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(feat_labels, fontsize=10)
+        ax.axvline(0, color='black', linewidth=0.8)
+        ax.set_xlabel('Mean SHAP contribution', fontsize=11)
+        ax.set_title('Feature Contributions  (red = positive  |  blue = negative)', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10)
+
+        # Annotate bar values
+        for i, (p, n) in enumerate(zip(pos_vals, neg_vals)):
+            if p > 0:
+                ax.text(p + 0.001, i, f'+{p:.3f}', va='center', fontsize=8, color='#d73027')
+            if n > 0:
+                ax.text(-n - 0.001, i, f'-{n:.3f}', va='center', ha='right', fontsize=8, color='#4575b4')
+
+        plt.tight_layout()
+        if show:
+            plt.show()
+        return fig, ax
 
     # ------------------------------------------------------------------
     # Plots — SINGLE SAMPLE
     # ------------------------------------------------------------------
 
-    def waterfall_plot(self, X, sample_idx=0, class_idx=1, show=True):
+    def waterfall_plot(self, X, sample_idx=0, class_idx=1, max_display=10, show=True):
         """
         Waterfall plot for a single sample.
 
@@ -322,4 +384,4 @@ class SHAPAnalyzer:
         if self._is_multiclass(sv):
             sv = self._slice_class(sv, class_idx)
 
-        shap.plots.waterfall(sv[0], show=show)
+        shap.plots.waterfall(sv[0], max_display=max_display, show=show)

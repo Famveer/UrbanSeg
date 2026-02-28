@@ -109,7 +109,7 @@ class EnsembleClassifier():
             'hist_gradient_boosting': {
                 'model': HistGradientBoostingClassifier(random_state=self.random_state),
                 'params': {
-                    'classifier__max_iter': [100, 300, 500],
+                    'classifier__max_iter': [200],
                     'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
                     'classifier__max_depth': [None, 5, 10, 20],
                     'classifier__min_samples_leaf': np.arange(10, 40, 10),
@@ -128,7 +128,7 @@ class EnsembleClassifier():
                     random_state=self.random_state
                 ),
                 'params': {
-                    'classifier__n_estimators': [50, 100, 200],
+                    'classifier__n_estimators': [200],
                     'classifier__max_samples': [0.6, 0.8, 1.0],
                     'classifier__max_features': [0.6, 0.8, 1.0],
                     'classifier__bootstrap': [True, False],
@@ -149,13 +149,13 @@ class EnsembleClassifier():
                 ),
                 'params': {
                     'classifier__n_estimators': [200],
-                    'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
+                    'classifier__learning_rate': [0.05],
                     'classifier__max_depth': [3, 5, 7],
                     'classifier__subsample': [0.7, 0.9, 1.0],
                     'classifier__colsample_bytree': [0.7, 0.9, 1.0],
                     'classifier__gamma': [0, 0.1, 0.5],
-                    'classifier__reg_alpha': [0, 0.1, 1.0],       # L1
-                    'classifier__reg_lambda': [1.0, 2.0, 5.0],    # L2
+                    'classifier__reg_alpha': [0.1],       # L1
+                    'classifier__reg_lambda': [0.5],    # L2
                     'classifier__scale_pos_weight': [1, 5, 10],   # class imbalance
                 }
             },
@@ -171,13 +171,13 @@ class EnsembleClassifier():
                 ),
                 'params': {
                     'classifier__n_estimators': [200],
-                    'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
+                    'classifier__learning_rate': [0.05],
                     'classifier__num_leaves': [31, 63, 127],
-                    'classifier__max_depth': [-1, 5, 10],
+                    'classifier__max_depth': [3, 5, 7],
                     'classifier__subsample': [0.7, 0.9, 1.0],
                     'classifier__colsample_bytree': [0.7, 0.9, 1.0],
-                    'classifier__reg_alpha': [0, 0.1, 1.0],       # L1
-                    'classifier__reg_lambda': [0, 0.1, 1.0],      # L2
+                    'classifier__reg_alpha': [0.1],       # L1
+                    'classifier__reg_lambda': [0.1],      # L2
                     'classifier__min_child_samples': [10, 20, 50],
                     'classifier__class_weight': [None, 'balanced'],
                 }
@@ -194,9 +194,9 @@ class EnsembleClassifier():
                 ),
                 'params': {
                     'classifier__iterations': [200],
-                    'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
-                    'classifier__depth': [4, 6, 8, 10],
-                    'classifier__l2_leaf_reg': [1, 3, 5, 10],
+                    'classifier__learning_rate': [0.05],
+                    'classifier__max_depth': [3, 5, 7],
+                    'classifier__l2_leaf_reg': [3, 5, 7],
                     'classifier__subsample': [0.7, 0.9, 1.0],
                     'classifier__colsample_bylevel': [0.7, 0.9, 1.0],
                     'classifier__auto_class_weights': [None, 'Balanced'],
