@@ -1,6 +1,5 @@
-#python 3.12
+#python 3.9
 jupyter
-numpy
 pandas
 tqdm
 opencv-python
@@ -14,9 +13,15 @@ scikit-learn
 graphviz
 seaborn
 shapely
-dotenv
+python-dotenv
 pydantic-settings
 scikit-image
+numpy==1.23.5
+mxnet==1.9.1
+#mxnet-cu112==1.9.1
+gluoncv==0.10.5
+xgboost
+lightgbm
+catboost
+shap
 lime
-gluoncv
-mxnet

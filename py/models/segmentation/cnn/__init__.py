@@ -1,0 +1,1 @@
+from .segmentator import ConvMaskClassifier
