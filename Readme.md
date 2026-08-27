@@ -1,6 +1,6 @@
 # UrbanSeg
 
-Exploring the PlacePulse 2.0 dataset and analyzing the urban safety perception through visual features. [Paper](https://fmorenovr.github.io/documents/papers/book_chapters/2021_MICAI.pdf).
+Exploring the PlacePulse 2.0 dataset and analyzing the urban safety perception through visual features. [Paper](https://fmorenovr.github.io/documents/articles/book_chapters/2021_MICAI.pdf).
 
 # Requirements
 
